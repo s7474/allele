@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Allele CSV Processor</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+            padding: 30px;
+        }
+
+        h1 {
+            color: #333;
+            margin-bottom: 10px;
+            font-size: 28px;
+        }
+
+        .subtitle {
+            color: #666;
+            margin-bottom: 30px;
+            font-size: 14px;
+        }
+
+        .drop-zone {
+            border: 3px dashed #667eea;
+            border-radius: 10px;
+            padding: 60px 20px;
+            text-align: center;
+            background: #f8f9ff;
+            transition: all 0.3s ease;
+            cursor: pointer;
+            margin-bottom: 20px;
+        }
+
+        .drop-zone.dragover {
+            background: #e8ebff;
+            border-color: #764ba2;
+            transform: scale(1.02);
+        }
+
+        .drop-zone h2 {
+            color: #667eea;
+            margin-bottom: 10px;
+            font-size: 22px;
+        }
+
+        .drop-zone p {
+            color: #888;
+            font-size: 14px;
+        }
+
+        .file-input {
+            display: none;
+        }
+
+        .file-list {
+            margin-bottom: 20px;
+        }
+
+        .file-item {
+            background: #f5f5f5;
+            padding: 10px 15px;
+            margin-bottom: 8px;
+            border-radius: 5px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-left: 4px solid #667eea;
+        }
+
+        .file-item .file-name {
+            font-weight: 500;
+            color: #333;
+        }
+
+        .file-item .file-size {
+            color: #999;
+            font-size: 12px;
+        }
+
+        .btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 12px 30px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: 600;
+            transition: all 0.3s ease;
+            margin-right: 10px;
+            margin-bottom: 10px;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 20px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .btn-secondary {
+            background: #28a745;
+        }
+
+        .btn-secondary:hover {
+            box-shadow: 0 5px 20px rgba(40, 167, 69, 0.4);
+        }
+
+        .controls {
+            margin-bottom: 20px;
+        }
+
+        .log-container {
+            background: #1e1e1e;
+            color: #d4d4d4;
+            padding: 20px;
+            border-radius: 5px;
+            font-family: 'Courier New', monospace;
+            font-size: 13px;
+            max-height: 300px;
+            overflow-y: auto;
+            margin-bottom: 20px;
+        }
+
+        .log-container .log-entry {
+            margin-bottom: 5px;
+        }
+
+        .log-container .log-error {
+            color: #f48771;
+        }
+
+        .log-container .log-success {
+            color: #89d185;
+        }
+
+        .log-container .log-info {
+            color: #6eb3f7;
+        }
+
+        .result-section {
+            margin-top: 30px;
+            display: none;
+        }
+
+        .result-section.visible {
+            display: block;
+        }
+
+        .result-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+
+        .result-header h3 {
+            color: #333;
+            font-size: 20px;
+        }
+
+        .result-stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+
+        .stat-card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+        }
+
+        .stat-card .stat-label {
+            font-size: 14px;
+            opacity: 0.9;
+            margin-bottom: 5px;
+        }
+
+        .stat-card .stat-value {
+            font-size: 28px;
+            font-weight: bold;
+        }
+
+        .result-preview {
+            background: #f5f5f5;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            padding: 15px;
+            max-height: 400px;
+            overflow: auto;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            white-space: pre;
+            line-height: 1.5;
+        }
+
+        .spinner {
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #667eea;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 20px auto;
+            display: none;
+        }
+
+        .spinner.active {
+            display: block;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .notification {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: #28a745;
+            color: white;
+            padding: 15px 25px;
+            border-radius: 5px;
+            box-shadow: 0 5px 20px rgba(0,0,0,0.3);
+            display: none;
+            z-index: 1000;
+            animation: slideIn 0.3s ease;
+        }
+
+        .notification.show {
+            display: block;
+        }
+
+        @keyframes slideIn {
+            from {
+                transform: translateX(400px);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🧬 Allele CSV Processor</h1>
+        <p class="subtitle">Upload CSV files with allele data for processing</p>
+
+        <div class="drop-zone" id="dropZone">
+            <h2>📁 Drop CSV Files Here</h2>
+            <p>or click to browse</p>
+            <input type="file" id="fileInput" class="file-input" multiple accept=".csv">
+        </div>
+
+        <div class="file-list" id="fileList"></div>
+
+        <div class="controls">
+            <button class="btn" id="processBtn" disabled>Process Files</button>
+            <button class="btn" id="clearBtn">Clear Files</button>
+        </div>
+
+        <div class="spinner" id="spinner"></div>
+
+        <div class="log-container" id="logContainer"></div>
+
+        <div class="result-section" id="resultSection">
+            <div class="result-header">
+                <h3>📊 Processing Results</h3>
+                <button class="btn btn-secondary" id="downloadBtn">Download CSV</button>
+            </div>
+
+            <div class="result-stats">
+                <div class="stat-card">
+                    <div class="stat-label">Total Records</div>
+                    <div class="stat-value" id="totalRecords">0</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">Unique Records</div>
+                    <div class="stat-value" id="uniqueRecords">0</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">Files Processed</div>
+                    <div class="stat-value" id="filesProcessed">0</div>
+                </div>
+            </div>
+
+            <h4 style="margin-bottom: 10px; color: #333;">Preview (first 50 lines):</h4>
+            <div class="result-preview" id="resultPreview"></div>
+        </div>
+    </div>
+
+    <div class="notification" id="notification">
+        CSV file downloaded!
+    </div>
+
+    <script src="processor.js"></script>
+</body>
+</html>
+
