@@ -1,5 +1,6 @@
 // Global variable to store the processed result
 window.ALLELE_PROCESSING_RESULT = null;
+window.ALLELE_DUPLICATES_RESULT = null;
 
 // Constants
 const SAMPLE_ID = "SampleID";
@@ -153,20 +154,47 @@ function recordsAreIdentical(leftRecord, rightRecord) {
 
 function deduplicateById(sortedRecords) {
     const uniqueRecords = [];
+    const conflictingDuplicateRecords = [];
+    const conflictingIds = new Set();
+    let identicalDuplicateCount = 0;
 
     for (let record of sortedRecords) {
         const lastRecord = uniqueRecords[uniqueRecords.length - 1];
         if (lastRecord && lastRecord.ID === record.ID) {
-            // Keep one row per ID only when duplicates are exactly identical.
             if (!recordsAreIdentical(lastRecord, record)) {
-                throw new Error(`Duplicate ID with different content detected: ${record.ID}`);
+                // Keep original record in the main output and collect conflicting duplicates separately.
+                if (!conflictingIds.has(record.ID)) {
+                    conflictingIds.add(record.ID);
+                    conflictingDuplicateRecords.push(lastRecord);
+                }
+                conflictingDuplicateRecords.push(record);
+            } else {
+                identicalDuplicateCount++;
             }
             continue;
         }
         uniqueRecords.push(record);
     }
 
-    return uniqueRecords;
+    return {
+        uniqueRecords,
+        conflictingDuplicateRecords,
+        identicalDuplicateCount,
+        conflictingDuplicateCount: conflictingDuplicateRecords.length,
+        conflictingIdCount: conflictingIds.size
+    };
+}
+
+function triggerDownload(content, filename, mimeType) {
+    const blob = new Blob([content], { type: mimeType });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
 }
 
 function rightPad(str, length) {
@@ -368,10 +396,17 @@ async function processFiles(files) {
         // Ensure final output is globally sorted by ID across all processed files.
         allIds.sort(compareByIdAsc);
 
-        const uniqueOutputRecords = deduplicateById(allIds);
-        const duplicateCountRemoved = allIds.length - uniqueOutputRecords.length;
-        if (duplicateCountRemoved > 0) {
-            log(`Removed ${duplicateCountRemoved} duplicate record(s) with identical content`, 'info');
+        const deduplicationResult = deduplicateById(allIds);
+        const uniqueOutputRecords = deduplicationResult.uniqueRecords;
+        if (deduplicationResult.identicalDuplicateCount > 0) {
+            log(`Removed ${deduplicationResult.identicalDuplicateCount} duplicate record(s) with identical content`, 'info');
+        }
+        if (deduplicationResult.conflictingDuplicateCount > 0) {
+            const conflictingOutput = generateOutput(deduplicationResult.conflictingDuplicateRecords);
+            window.ALLELE_DUPLICATES_RESULT = conflictingOutput;
+            log(`Found ${deduplicationResult.conflictingIdCount} duplicate ID(s) with conflicting content; use Download duplicates.txt`, 'error');
+        } else {
+            window.ALLELE_DUPLICATES_RESULT = null;
         }
         log(`Total records in output: ${uniqueOutputRecords.length}`, 'info');
 
@@ -388,6 +423,7 @@ async function processFiles(files) {
         document.getElementById('totalRecords').textContent = uniqueOutputRecords.length;
         document.getElementById('uniqueRecords').textContent = uniqueOutputRecords.length;
         document.getElementById('filesProcessed').textContent = filesProcessed;
+        document.getElementById('downloadDuplicatesBtn').disabled = !window.ALLELE_DUPLICATES_RESULT;
 
         // Show preview (first 50 lines)
         const lines = output.split('\n');
@@ -492,6 +528,8 @@ clearBtn.addEventListener('click', () => {
     document.getElementById('logContainer').innerHTML = '';
     document.getElementById('resultSection').classList.remove('visible');
     window.ALLELE_PROCESSING_RESULT = null;
+    window.ALLELE_DUPLICATES_RESULT = null;
+    document.getElementById('downloadDuplicatesBtn').disabled = true;
     log('Cleared all files and results', 'info');
 });
 
@@ -499,31 +537,26 @@ clearBtn.addEventListener('click', () => {
 downloadBtn.addEventListener('click', () => {
     if (window.ALLELE_PROCESSING_RESULT) {
         try {
-            // Create a Blob from the result data
-            const blob = new Blob([window.ALLELE_PROCESSING_RESULT], { type: 'text/plain;charset=utf-8;' });
-
-            // Create a temporary URL for the blob
-            const url = URL.createObjectURL(blob);
-
-            // Create a temporary anchor element to trigger the download
-            const link = document.createElement('a');
-            link.href = url;
-
-            // Fixed filename requested by user.
-            link.download = 'output.txt';
-
-            // Append to body, click, and remove
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-
-            // Release the URL object
-            URL.revokeObjectURL(url);
+            triggerDownload(window.ALLELE_PROCESSING_RESULT, 'output.txt', 'text/plain;charset=utf-8;');
 
             showNotification('output.txt downloaded!');
             log('Result downloaded as output.txt', 'success');
         } catch (error) {
             log('Failed to download output.txt: ' + error.message, 'error');
+            console.error(error);
+        }
+    }
+});
+
+// Download conflicting duplicates file button
+document.getElementById('downloadDuplicatesBtn').addEventListener('click', () => {
+    if (window.ALLELE_DUPLICATES_RESULT) {
+        try {
+            triggerDownload(window.ALLELE_DUPLICATES_RESULT, 'duplicates.txt', 'text/plain;charset=utf-8;');
+            showNotification('duplicates.txt downloaded!');
+            log('Conflicting duplicates downloaded as duplicates.txt', 'success');
+        } catch (error) {
+            log('Failed to download duplicates.txt: ' + error.message, 'error');
             console.error(error);
         }
     }

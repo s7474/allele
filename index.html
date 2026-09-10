@@ -296,7 +296,10 @@
         <div class="result-section" id="resultSection">
             <div class="result-header">
                 <h3>📊 Processing Results</h3>
-                <button class="btn btn-secondary" id="downloadBtn">Download CSV</button>
+                <div>
+                    <button class="btn" id="downloadDuplicatesBtn" disabled>Download duplicates.txt</button>
+                    <button class="btn btn-secondary" id="downloadBtn">Download output.txt</button>
+                </div>
             </div>
 
             <div class="result-stats">
@@ -320,7 +323,7 @@
     </div>
 
     <div class="notification" id="notification">
-        CSV file downloaded!
+        output.txt downloaded!
     </div>
 
     <script src="processor.js"></script>
