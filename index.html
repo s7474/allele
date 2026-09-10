@@ -3,6 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate, max-age=0">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
     <title>Allele CSV Processor</title>
     <style>
         * {
@@ -326,7 +329,12 @@
         output.txt downloaded!
     </div>
 
-    <script src="processor.js"></script>
+    <script>
+        // Cache-busting query string forces a fresh script request on each page load.
+        const processorScript = document.createElement('script');
+        processorScript.src = `processor.js?v=${Date.now()}`;
+        document.body.appendChild(processorScript);
+    </script>
 </body>
 </html>
 
