@@ -136,6 +136,39 @@ function compareByIdAsc(left, right) {
     return left.ID.localeCompare(right.ID, undefined, { numeric: true, sensitivity: 'base' });
 }
 
+function recordsAreIdentical(leftRecord, rightRecord) {
+    if (!leftRecord || !rightRecord) return false;
+
+    for (let key in FieldLength) {
+        const fieldName = FieldLength[key].replace(/\s+/g, '');
+        const leftValue = leftRecord[fieldName] || "";
+        const rightValue = rightRecord[fieldName] || "";
+        if (leftValue !== rightValue) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+function deduplicateById(sortedRecords) {
+    const uniqueRecords = [];
+
+    for (let record of sortedRecords) {
+        const lastRecord = uniqueRecords[uniqueRecords.length - 1];
+        if (lastRecord && lastRecord.ID === record.ID) {
+            // Keep one row per ID only when duplicates are exactly identical.
+            if (!recordsAreIdentical(lastRecord, record)) {
+                throw new Error(`Duplicate ID with different content detected: ${record.ID}`);
+            }
+            continue;
+        }
+        uniqueRecords.push(record);
+    }
+
+    return uniqueRecords;
+}
+
 function rightPad(str, length) {
     str = str || "";
     while (str.length < length) {
@@ -330,34 +363,20 @@ async function processFiles(files) {
         }
 
         log(`Processed ${filesProcessed} files`, 'success');
-        log(`Total records: ${allIds.length}`, 'info');
-
-        const uniqueIds = new Set(allIds.map(f => f.ID));
-        log(`Unique records: ${uniqueIds.size}`, 'info');
-
-        // Check for duplicates
-        const duplicateMap = {};
-        for (let f of allIds) {
-            if (duplicateMap[f.ID]) {
-                duplicateMap[f.ID]++;
-            } else {
-                duplicateMap[f.ID] = 1;
-            }
-        }
-
-        const duplicates = Object.entries(duplicateMap).filter(([id, count]) => count > 1);
-        if (duplicates.length > 0) {
-            log(`Found ${duplicates.length} duplicate IDs`, 'error');
-            duplicates.forEach(([id, count]) => {
-                log(`  ${id}: ${count} occurrences`, 'error');
-            });
-        }
+        log(`Total records before deduplication: ${allIds.length}`, 'info');
 
         // Ensure final output is globally sorted by ID across all processed files.
         allIds.sort(compareByIdAsc);
 
-        // Generate output
-        const output = generateOutput(allIds);
+        const uniqueOutputRecords = deduplicateById(allIds);
+        const duplicateCountRemoved = allIds.length - uniqueOutputRecords.length;
+        if (duplicateCountRemoved > 0) {
+            log(`Removed ${duplicateCountRemoved} duplicate record(s) with identical content`, 'info');
+        }
+        log(`Total records in output: ${uniqueOutputRecords.length}`, 'info');
+
+        // Generate output with unique records only.
+        const output = generateOutput(uniqueOutputRecords);
 
         // Store in global variable
         window.ALLELE_PROCESSING_RESULT = output;
@@ -366,8 +385,8 @@ async function processFiles(files) {
         log(`Result stored in window.ALLELE_PROCESSING_RESULT`, 'success');
 
         // Update UI
-        document.getElementById('totalRecords').textContent = allIds.length;
-        document.getElementById('uniqueRecords').textContent = uniqueIds.size;
+        document.getElementById('totalRecords').textContent = uniqueOutputRecords.length;
+        document.getElementById('uniqueRecords').textContent = uniqueOutputRecords.length;
         document.getElementById('filesProcessed').textContent = filesProcessed;
 
         // Show preview (first 50 lines)
@@ -476,12 +495,12 @@ clearBtn.addEventListener('click', () => {
     log('Cleared all files and results', 'info');
 });
 
-// Download CSV button
+// Download output file button
 downloadBtn.addEventListener('click', () => {
     if (window.ALLELE_PROCESSING_RESULT) {
         try {
             // Create a Blob from the result data
-            const blob = new Blob([window.ALLELE_PROCESSING_RESULT], { type: 'text/csv;charset=utf-8;' });
+            const blob = new Blob([window.ALLELE_PROCESSING_RESULT], { type: 'text/plain;charset=utf-8;' });
 
             // Create a temporary URL for the blob
             const url = URL.createObjectURL(blob);
@@ -490,9 +509,8 @@ downloadBtn.addEventListener('click', () => {
             const link = document.createElement('a');
             link.href = url;
 
-            // Generate filename with timestamp
-            const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5);
-            link.download = `allele_processing_result_${timestamp}.csv`;
+            // Fixed filename requested by user.
+            link.download = 'output.txt';
 
             // Append to body, click, and remove
             document.body.appendChild(link);
@@ -502,10 +520,10 @@ downloadBtn.addEventListener('click', () => {
             // Release the URL object
             URL.revokeObjectURL(url);
 
-            showNotification('CSV file downloaded!');
-            log('Result downloaded as CSV file', 'success');
+            showNotification('output.txt downloaded!');
+            log('Result downloaded as output.txt', 'success');
         } catch (error) {
-            log('Failed to download CSV: ' + error.message, 'error');
+            log('Failed to download output.txt: ' + error.message, 'error');
             console.error(error);
         }
     }
